@@ -2,29 +2,28 @@ import streamlit as st
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score
 import os
 from datetime import datetime
 from dotenv import load_dotenv
+
 load_dotenv()
 
-# --- Auth imports ---
-from auth.auth_manager import create_user_table, signup_user, login_user
-from utils.helper import load_model, get_questions
+from auth.auth_manager import create_user_table, signup_user, login_user, get_username_by_email
+from utils.helper import load_model, get_questions, retrain_model_with_feedback, append_to_insomnia_data
 from utils.recommender import recommend_song_from_dataset
+from admin.admin_panel import show_admin_panel
+from utils.feedback import save_feedback
 
 # --- Initialize DB ---
 create_user_table()
 
-# --- Login Session Management ---
-import streamlit as st
-from auth.auth_manager import signup_user, login_user
-
-# --- Login Session Management ---
+# --- Session Initialization ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
 
+# --- Authentication ---
 if not st.session_state.logged_in:
     st.sidebar.title("🔐 Authentication")
     option = st.sidebar.radio("Login/Signup", ("Login", "Signup"))
@@ -40,161 +39,200 @@ if not st.session_state.logged_in:
                     st.success("✅ Account created. You are now logged in.")
                     st.session_state.logged_in = True
                     st.session_state.username = username
-                    st.rerun()  # 👈 Use st.rerun() instead of deprecated function
+                    st.rerun()
                 else:
                     st.error("❌ Username already exists.")
-
-    elif option == "Login":
+    else:
         with st.sidebar.form("login_form"):
             email = st.text_input("Email")
             password = st.text_input("Password", type="password")
             submit = st.form_submit_button("Login")
             if submit:
                 if login_user(email, password):
-                    from auth.auth_manager import get_username_by_email
                     st.session_state.logged_in = True
-                    username = get_username_by_email(email)
-                    st.session_state.username = username if username else email
+                    st.session_state.username = get_username_by_email(email) or email
                     st.success(f"✅ Logged in as {st.session_state.username}")
-                    st.rerun()  # 👈 Refresh to show main app after login
+                    st.rerun()
                 else:
                     st.error("❌ Invalid credentials.")
-    st.stop()  # Halt the rest of the app until user is authenticated
 
+# --- Logout ---
+def logout_button():
+    if st.sidebar.button("Logout", key="unique_logout_button"):
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+        st.rerun()
 
-# --- Welcome message ---
-st.sidebar.success(f"Welcome, {st.session_state.username} 👋")
+# --- Sidebar Welcome & Logout Button ---
+if st.session_state.logged_in:
+    st.sidebar.success(f"Welcome, {st.session_state.username} 👋")
+    logout_button()
 
-#----dashboard-----
+# --- Save user input to insomnia dataset ---
+def save_insomnia_entry(user_input, insomnia_level):
+    data_file = "data/insomnia_synthetic.csv"
+    os.makedirs("data", exist_ok=True)
+
+    new_data = pd.DataFrame([user_input], columns=[
+        "Insomnia Severity", "Sleep Quality", "Depression Level", "Sleep Hygiene",
+        "Negative Thoughts About Sleep", "Bedtime Worrying", "Stress Level",
+        "Coping Skills", "Emotion Regulation"
+    ])
+    new_data["Username"] = st.session_state.username
+    new_data["Timestamp"] = datetime.now().isoformat()
+    new_data["Insomnia Level"] = insomnia_level
+
+    if os.path.exists(data_file):
+        existing_df = pd.read_csv(data_file)
+        combined_df = pd.concat([existing_df, new_data], ignore_index=True)
+    else:
+        combined_df = new_data
+
+    combined_df.to_csv(data_file, index=False)
+
+# --- Dashboard ---
+# --- Dashboard ---
 def show_dashboard(username):
-    st.info("Dashboard feature has been removed as per user request.")
+    st.title("📊 Insomnia Data Dashboard")
+    data_path = "data/insomnia_synthetic.csv"
+    if not os.path.exists(data_path):
+        st.warning("Insomnia synthetic data file not found.")
+        return
 
+    df = pd.read_csv(data_path)
+    st.markdown("### Insomnia Level Distribution")
+    st.bar_chart(df["Insomnia Level"].value_counts())
 
-# ------------------ Main App ------------------
+    st.markdown("### Average Scores by Insomnia Level")
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    avg_scores = df.groupby("Insomnia Level")[numeric_cols].mean()
+    st.dataframe(avg_scores)
 
-questions = get_questions()
+    st.markdown("### Correlation Heatmap")
+    fig, ax = plt.subplots()
+    sns.heatmap(df.corr(numeric_only=True), annot=True, cmap="coolwarm", ax=ax)
+    st.pyplot(fig)
+
+import numpy as np
+# --- Feedback Form ---
 def collect_feedback(insomnia_level, song_label, user_input):
     st.markdown("## 🗣️ Share Your Feedback")
-    st.write("Your input helps us improve the recommendations and understand what works best for you.")
-
     with st.form("feedback_form"):
         st.markdown(f"**🎵 Song Recommended:** {song_label}")
-        st.markdown(f"**😴 Predicted Insomnia Level:** {insomnia_level}")
-
+        st.markdown(f"**🛌 Predicted Insomnia Level:** {insomnia_level}")
         relaxed = st.radio("Did the song help you feel relaxed?", ["Yes", "No"], index=0)
         sleep = st.radio("Did the song help you fall asleep?", ["Yes", "No"], index=0)
-        sleep_quality = st.selectbox("How was your sleep quality?", ["Poor", "Average", "Good", "Excellent"])
-        rating = st.slider("⭐ Rate the song experience (1 = Bad, 5 = Excellent)", 1, 5, 3)
+        sleep_quality = st.selectbox("How was your sleep quality?", ["Poor", "Average", "Good", "Excellent"], key="quality")
+
+        rating = st.radio("⭐ Rate the song experience", [1, 2, 3, 4, 5], format_func=lambda x: "⭐" * x, key="rating")
         comments = st.text_area("Additional comments or suggestions (optional)")
 
         submit_feedback = st.form_submit_button("Submit Feedback ✅")
-
         if submit_feedback:
             feedback_entry = {
                 "Username": st.session_state.username,
                 "Timestamp": datetime.now().isoformat(),
                 "Insomnia Level": insomnia_level,
                 "Recommended Song": song_label,
-                "Felt Relaxed": relaxed,
-                "Fell Asleep": sleep,
+                "Felt Relaxed": relaxed == "Yes",
+                "Fell Asleep": sleep == "Yes",
                 "Sleep Quality": sleep_quality,
                 "Rating": rating,
                 "Comments": comments,
             }
 
-            # Add user input features to feedback entry
-            for i, question in enumerate(questions):
-                feedback_entry[question] = user_input[i]
+            for i, q in enumerate(get_questions()):
+                feedback_entry[q] = user_input[i]
 
             feedback_file = "data/feedback.csv"
-            feedback_columns = ["Username", "Timestamp", "Insomnia Level", "Recommended Song", "Felt Relaxed", "Fell Asleep", "Sleep Quality", "Rating", "Comments"] + questions
-            feedback_df = pd.DataFrame([feedback_entry], columns=feedback_columns)
             os.makedirs("data", exist_ok=True)
 
-            if os.path.exists(feedback_file):
-                feedback_df.to_csv(feedback_file, mode='a', header=False, index=False)
-            else:
-                feedback_df.to_csv(feedback_file, index=False)
+            try:
+                pd.DataFrame([feedback_entry]).to_csv(feedback_file, mode='a', header=not os.path.exists(feedback_file), index=False)
+                st.session_state.feedback_submitted = True
+                st.success("✅ Thank you! Your feedback has been saved.")
+                with st.expander("📄 See your submitted feedback"):
+                    st.json(feedback_entry)
+            except Exception as e:
+                st.error(f"Error saving feedback: {e}")
 
-            st.success("✅ Thank you! Your feedback has been saved.")
-
-            with st.expander("📄 See the feedback you just submitted"):
-                st.json(feedback_entry)
-
-
-# def show_metrics():
-#     st.subheader("📊 Model Evaluation")
-#     try:
-#         df = pd.read_csv("data/insomnia_synthetic.csv")
-#         model, label_encoder = load_model()
-#         X = df[questions]
-#         y = label_encoder.transform(df["Insomnia Level"])
-#         y_pred = model.predict(X)
-
-#         acc = accuracy_score(y, y_pred)
-#         st.write(f"**Accuracy:** {acc:.2f}")
-
-#         st.text("Classification Report:")
-#         st.text(classification_report(y, y_pred, target_names=label_encoder.classes_))
-
-#         st.text("Confusion Matrix:")
-#         cm = confusion_matrix(y, y_pred)
-#         fig, ax = plt.subplots()
-#         sns.heatmap(cm, annot=True, fmt='d', xticklabels=label_encoder.classes_,
-#                     yticklabels=label_encoder.classes_, cmap='Blues', ax=ax)
-#         st.pyplot(fig)
-#     except Exception as e:
-#         st.error(f"Error loading evaluation metrics: {e}")
-
-def plot_insomnia_distribution():
-    st.subheader("📈 Insomnia Level Distribution")
-    try:
-        df = pd.read_csv("data/insomnia_synthetic.csv")
-        fig, ax = plt.subplots()
-        sns.countplot(data=df, x="Insomnia Level", order=["No Insomnia", "Mild", "Moderate", "Severe"], ax=ax)
-        st.pyplot(fig)
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-
+# --- Main App ---
 def main():
-    page = st.sidebar.selectbox("Navigate", ["Home", "Dashboard"])
-    
+    if not st.session_state.logged_in:
+        st.warning("Please log in to access the application features.")
+        return
+
+    user_is_admin = st.session_state.username.lower() == "admin"
+    menu_options = ["Home", "Dashboard"]
+    if user_is_admin:
+        menu_options.append("Admin Panel")
+
+    page = st.sidebar.selectbox("Navigate", menu_options)
+
+    questions_with_help = {
+        "Insomnia Severity": "Measures overall severity of insomnia symptoms.",
+        "Sleep Quality": "Reflects how restful your sleep has been recently.",
+        "Depression Level": "How often you've felt down or disinterested.",
+        "Sleep Hygiene": "How well you follow good sleep practices.",
+        "Negative Thoughts About Sleep": "Extent of negative thinking about sleep.",
+        "Bedtime Worrying": "Worry or anxiety levels at bedtime.",
+        "Stress Level": "Your general stress level recently.",
+        "Coping Skills": "How effectively you deal with stressors.",
+        "Emotion Regulation": "How well you manage difficult emotions."
+    }
+    questions = list(questions_with_help.keys())
+
     if page == "Dashboard":
         show_dashboard(st.session_state.username)
+
+    elif page == "Admin Panel":
+        show_admin_panel()
+
     elif page == "Home":
         st.title("🧠 Insomnia Detection & Smart Lullaby Recommender")
-        st.write("Answer the following questions (0 = None, 4 = Very Severe):")
+        st.markdown("Rate each symptom from **0.0 (None)** to **4.0 (Very Severe)**:")
 
-        user_input = [st.slider(q, 0, 4, 0) for q in questions]
-        num_songs = st.slider("How many songs would you like to be recommended?", 1, 10, 1)
+        user_input = [
+            st.number_input(f"**{q}**\n\n_{desc}_", 0.0, 4.0, step=0.1, key=f"input_{i}", value=0.0)
+            for i, (q, desc) in enumerate(questions_with_help.items())
+        ]
+
+        num_songs = st.number_input("Number of song recommendations:", 1, 10, 1, key="num_songs", placeholder="1 to 10")
 
         if st.button("Predict & Recommend"):
-            model, label_encoder = load_model()
-            import pandas as pd
-            input_df = pd.DataFrame([user_input], columns=questions)
-            prediction = model.predict(input_df)[0]
-            insomnia_level = label_encoder.inverse_transform([prediction])[0]
-            st.success(f"🧠 Predicted Insomnia Level: **{insomnia_level}**")
+            try:
+                model, label_encoder, scaler = load_model()
 
-            labels, links = recommend_song_from_dataset(insomnia_level, num_songs)
-            for i, (label, link) in enumerate(zip(labels, links), start=1):
-                st.info(f"🎵 Recommended Song {i}: {label}")
-                if link:
-                    st.markdown(f"[▶️ Listen on Spotify]({link})")
+                input_df = pd.DataFrame([user_input], columns=questions)
+                scaled_input = scaler.transform(input_df)
+                prediction = model.predict(scaled_input)[0]
+                insomnia_level = label_encoder.inverse_transform([prediction])[0]
+                
 
-            collect_feedback(insomnia_level, labels[0] if labels else "No song", user_input)
+                st.success(f"🧠 Predicted Insomnia Level: **{insomnia_level}**")
 
-        st.markdown("---")
+                save_insomnia_entry(user_input, insomnia_level)
+                st.success("📁 Your input has been saved to the dataset.")
 
-        from utils.helper import retrain_model_with_feedback
-        try:
-            train_acc, test_acc = retrain_model_with_feedback()
-            st.success(f"✅ Model retrained successfully! Training accuracy: {train_acc:.2f}, Test accuracy: {test_acc:.2f}")
-        except Exception as e:
-            st.error(f"Error retraining model: {e}")
+                labels, links, thumbnails = recommend_song_from_dataset(insomnia_level, num_songs)
 
-        # show_metrics()
-        plot_insomnia_distribution()
+                for i, (label, link, thumb) in enumerate(zip(labels, links, thumbnails), start=1):
+                    st.markdown(f"### 🎵 Recommended Song {i}")
+                    if thumb:
+                        st.image(thumb, width=200)
+                    st.markdown(f"**{label}**")
+                    if link:
+                        st.markdown(
+                            f'<a href="{link}" target="_blank">'
+                            f'<button style="background-color:#1DB954; color:white; padding:10px; border:none; border-radius:5px;">'
+                            f'▶️ Listen on Spotify</button></a>',
+                            unsafe_allow_html=True
+                        )
 
-if __name__ == "__main__":
-    main()
+                collect_feedback(insomnia_level, labels[0] if labels else "N/A", user_input)
+
+            except Exception as e:
+                st.error(f"Error during prediction or recommendation: {e}")
+
+# --- Run App ---
+main()
