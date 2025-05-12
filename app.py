@@ -35,7 +35,8 @@ if not st.session_state.logged_in:
             password = st.text_input("Password", type="password")
             submit = st.form_submit_button("Signup")
             if submit:
-                if signup_user(username, email, password):
+                signup_result = signup_user(username, email, password)
+                if signup_result:
                     st.success("✅ Account created. You are now logged in.")
                     st.session_state.logged_in = True
                     st.session_state.username = username
@@ -43,18 +44,20 @@ if not st.session_state.logged_in:
                 else:
                     st.error("❌ Username already exists.")
     else:
-        with st.sidebar.form("login_form"):
-            email = st.text_input("Email")
-            password = st.text_input("Password", type="password")
-            submit = st.form_submit_button("Login")
-            if submit:
-                if login_user(email, password):
-                    st.session_state.logged_in = True
-                    st.session_state.username = get_username_by_email(email) or email
-                    st.success(f"✅ Logged in as {st.session_state.username}")
-                    st.rerun()
-                else:
-                    st.error("❌ Invalid credentials.")
+        if not st.session_state.logged_in:
+            with st.sidebar.form("login_form"):
+                email = st.text_input("Email")
+                password = st.text_input("Password", type="password")
+                submit = st.form_submit_button("Login")
+                if submit:
+                    login_result = login_user(email, password)
+                    if login_result:
+                        st.session_state.logged_in = True
+                        st.session_state.username = get_username_by_email(email) or email
+                        st.success(f"✅ Logged in as {st.session_state.username}")
+                        st.rerun()
+                    else:
+                        st.error("❌ Invalid credentials.")
 
 # --- Logout ---
 def logout_button():
@@ -76,7 +79,7 @@ def save_insomnia_entry(user_input, insomnia_level):
     new_data = pd.DataFrame([user_input], columns=[
         "Insomnia Severity", "Sleep Quality", "Depression Level", "Sleep Hygiene",
         "Negative Thoughts About Sleep", "Bedtime Worrying", "Stress Level",
-        "Coping Skills", "Emotion Regulation"
+        "Coping Skills", "Emotion Regulation", "Age"
     ])
     new_data["Username"] = st.session_state.username
     new_data["Timestamp"] = datetime.now().isoformat()
@@ -91,7 +94,6 @@ def save_insomnia_entry(user_input, insomnia_level):
     combined_df.to_csv(data_file, index=False)
 
 # --- Dashboard ---
-# --- Dashboard ---
 def show_dashboard(username):
     st.title("📊 Insomnia Data Dashboard")
     data_path = "data/insomnia_synthetic.csv"
@@ -104,7 +106,7 @@ def show_dashboard(username):
     st.bar_chart(df["Insomnia Level"].value_counts())
 
     st.markdown("### Average Scores by Insomnia Level")
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    numeric_cols = df.select_dtypes(include=[float, int]).columns.tolist()
     avg_scores = df.groupby("Insomnia Level")[numeric_cols].mean()
     st.dataframe(avg_scores)
 
@@ -113,7 +115,6 @@ def show_dashboard(username):
     sns.heatmap(df.corr(numeric_only=True), annot=True, cmap="coolwarm", ax=ax)
     st.pyplot(fig)
 
-import numpy as np
 # --- Feedback Form ---
 def collect_feedback(insomnia_level, song_label, user_input):
     st.markdown("## 🗣️ Share Your Feedback")
@@ -178,7 +179,8 @@ def main():
         "Bedtime Worrying": "Worry or anxiety levels at bedtime.",
         "Stress Level": "Your general stress level recently.",
         "Coping Skills": "How effectively you deal with stressors.",
-        "Emotion Regulation": "How well you manage difficult emotions."
+        "Emotion Regulation": "How well you manage difficult emotions.",
+        "Age": "What is the age of the user?"
     }
     questions = list(questions_with_help.keys())
 
@@ -194,6 +196,7 @@ def main():
 
         user_input = [
             st.number_input(f"**{q}**\n\n_{desc}_", 0.0, 4.0, step=0.1, key=f"input_{i}", value=0.0)
+            if q != "Age" else st.number_input(f"**{q}**\n\n_{desc}_", 1, 100, step=1, key=f"input_{i}", value=25)
             for i, (q, desc) in enumerate(questions_with_help.items())
         ]
 
@@ -207,7 +210,6 @@ def main():
                 scaled_input = scaler.transform(input_df)
                 prediction = model.predict(scaled_input)[0]
                 insomnia_level = label_encoder.inverse_transform([prediction])[0]
-                
 
                 st.success(f"🧠 Predicted Insomnia Level: **{insomnia_level}**")
 

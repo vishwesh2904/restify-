@@ -7,27 +7,28 @@ from datetime import datetime, timedelta
 QUESTIONS = [
     "Insomnia Severity", "Sleep Quality", "Depression Level", "Sleep Hygiene",
     "Negative Thoughts About Sleep", "Bedtime Worrying", "Stress Level",
-    "Coping Skills", "Emotion Regulation"
+    "Coping Skills", "Emotion Regulation", "Age"
 ]
 
 INSOMNIA_LEVELS = ["No Insomnia", "Mild", "Moderate", "Severe"]
 
-def generate_insomnia_synthetic_data(n_samples=1000):
+def generate_insomnia_synthetic_data(n_samples=2000):
     data = []
     samples_per_category = n_samples // 4  # Equal samples for each category
 
-    # No Insomnia samples - tighter range, less noise
+    # No Insomnia samples - very tight range, minimal noise
     for _ in range(samples_per_category):
         insomnia_severity = 0
-        sleep_quality = random.choice([3,4])
-        depression_level = random.choice([0])
-        sleep_hygiene = random.choice([3,4])
-        negative_thoughts = random.choice([0])
-        bedtime_worrying = random.choice([0])
-        stress_level = random.choice([0])
-        coping_skills = random.choice([3,4])
-        emotion_regulation = random.choice([3,4])
+        sleep_quality = random.choice([4,5])
+        depression_level = 0
+        sleep_hygiene = random.choice([4,5])
+        negative_thoughts = 0
+        bedtime_worrying = 0
+        stress_level = 0
+        coping_skills = random.choice([4,5])
+        emotion_regulation = random.choice([4,5])
 
+        age = random.randint(18, 65)
         responses = [
             insomnia_severity,
             sleep_quality,
@@ -37,24 +38,26 @@ def generate_insomnia_synthetic_data(n_samples=1000):
             bedtime_worrying,
             stress_level,
             coping_skills,
-            emotion_regulation
+            emotion_regulation,
+            age
         ]
         total = sum(responses)
         level = "No Insomnia"
         data.append(responses + [total, level])
 
-    # Mild Insomnia samples - slightly wider range but controlled
+    # Mild Insomnia samples - distinct ranges with controlled noise
     for _ in range(samples_per_category):
         insomnia_severity = random.choice([1,2])
-        sleep_quality = max(1, 4 - insomnia_severity + random.choice([-1,0]))
+        sleep_quality = max(2, 5 - insomnia_severity + random.choice([-1,0,1]))
         depression_level = min(2, insomnia_severity + random.choice([0,1]))
-        sleep_hygiene = max(1, 4 - random.randint(0, insomnia_severity))
-        negative_thoughts = min(2, insomnia_severity + random.choice([0]))
-        bedtime_worrying = min(2, insomnia_severity + random.choice([0]))
+        sleep_hygiene = max(2, 5 - random.randint(0, insomnia_severity))
+        negative_thoughts = min(2, insomnia_severity + random.choice([0,1]))
+        bedtime_worrying = min(2, insomnia_severity + random.choice([0,1]))
         stress_level = min(2, insomnia_severity + random.choice([0,1]))
-        coping_skills = max(1, 4 - insomnia_severity + random.choice([-1,0]))
-        emotion_regulation = max(1, 4 - insomnia_severity + random.choice([-1,0]))
+        coping_skills = max(2, 5 - insomnia_severity + random.choice([-1,0,1]))
+        emotion_regulation = max(2, 5 - insomnia_severity + random.choice([-1,0,1]))
 
+        age = random.randint(18, 65)
         responses = [
             insomnia_severity,
             sleep_quality,
@@ -64,7 +67,8 @@ def generate_insomnia_synthetic_data(n_samples=1000):
             bedtime_worrying,
             stress_level,
             coping_skills,
-            emotion_regulation
+            emotion_regulation,
+            age
         ]
         total = sum(responses)
         level = "Mild"
@@ -73,15 +77,16 @@ def generate_insomnia_synthetic_data(n_samples=1000):
     # Moderate Insomnia samples - tighter range, less overlap with Mild and Severe
     for _ in range(samples_per_category):
         insomnia_severity = random.choice([2,3])
-        sleep_quality = max(0, 3 - insomnia_severity + random.choice([0,1]))
+        sleep_quality = max(1, 4 - insomnia_severity + random.choice([0,1]))
         depression_level = min(3, insomnia_severity + random.choice([0,1]))
-        sleep_hygiene = max(0, 3 - random.randint(0, insomnia_severity))
+        sleep_hygiene = max(1, 4 - random.randint(0, insomnia_severity))
         negative_thoughts = min(3, insomnia_severity + random.choice([0,1]))
         bedtime_worrying = min(3, insomnia_severity + random.choice([0,1]))
         stress_level = min(3, insomnia_severity + random.choice([0,1]))
-        coping_skills = max(0, 3 - insomnia_severity + random.choice([0,1]))
-        emotion_regulation = max(0, 3 - insomnia_severity + random.choice([0,1]))
+        coping_skills = max(1, 4 - insomnia_severity + random.choice([0,1]))
+        emotion_regulation = max(1, 4 - insomnia_severity + random.choice([0,1]))
 
+        age = random.randint(18, 65)
         responses = [
             insomnia_severity,
             sleep_quality,
@@ -91,13 +96,14 @@ def generate_insomnia_synthetic_data(n_samples=1000):
             bedtime_worrying,
             stress_level,
             coping_skills,
-            emotion_regulation
+            emotion_regulation,
+            age
         ]
         total = sum(responses)
         level = "Moderate"
         data.append(responses + [total, level])
 
-    # Severe Insomnia samples - higher values, less noise
+    # Severe Insomnia samples - higher values, less noise, distinct range
     for _ in range(samples_per_category):
         insomnia_severity = random.choice([3,4])
         sleep_quality = max(0, 2 - insomnia_severity + random.choice([0]))
@@ -109,6 +115,7 @@ def generate_insomnia_synthetic_data(n_samples=1000):
         coping_skills = max(0, 2 - insomnia_severity + random.choice([0]))
         emotion_regulation = max(0, 2 - insomnia_severity + random.choice([0]))
 
+        age = random.randint(18, 65)
         responses = [
             insomnia_severity,
             sleep_quality,
@@ -118,7 +125,8 @@ def generate_insomnia_synthetic_data(n_samples=1000):
             bedtime_worrying,
             stress_level,
             coping_skills,
-            emotion_regulation
+            emotion_regulation,
+            age
         ]
         total = sum(responses)
         level = "Severe"

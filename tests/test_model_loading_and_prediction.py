@@ -25,6 +25,10 @@ class TestModelLoadingAndPrediction(unittest.TestCase):
             "Negative Thoughts About Sleep", "Bedtime Worrying", "Stress Level",
             "Coping Skills", "Emotion Regulation"
         ]
+        # Add missing "Age" feature with a default value
+        questions.append("Age")
+        sample_input.append(35)
+
         input_df = pd.DataFrame([sample_input], columns=questions)
 
         model, label_encoder, scaler = load_model()
@@ -46,15 +50,38 @@ class TestModelLoadingAndPrediction(unittest.TestCase):
     @patch("utils.helper.SMOTE.fit_resample")
     def test_retrain_model_with_feedback(self, mock_fit_resample):
         # Mock SMOTE to avoid ValueError due to small sample size
-        mock_fit_resample.return_value = (
-            pd.DataFrame([[1]*9, [2]*9, [3]*9, [4]*9, [5]*9]),  # larger fake features
-            pd.Series([0, 1, 0, 1, 0])          # larger fake target
-        )
+        import pandas as pd
+        import numpy as np
+        # Create a dummy DataFrame with 10 columns and 5 rows filled with 1s
+        dummy_features = pd.DataFrame(np.ones((10, 10)), columns=[
+            "Insomnia Severity", "Sleep Quality", "Depression Level", "Sleep Hygiene",
+            "Negative Thoughts About Sleep", "Bedtime Worrying", "Stress Level",
+            "Coping Skills", "Emotion Regulation", "Age"
+        ])
+        dummy_target = pd.Series([0, 1, 0, 1, 0, 0, 1, 0, 1, 0])
 
-        accuracy = retrain_model_with_feedback()
-        self.assertIsInstance(accuracy, float)
-        self.assertGreaterEqual(accuracy, 0.0)
-        self.assertLessEqual(accuracy, 1.0)
+        # Patch the read_csv method to return a DataFrame with data to avoid empty DataFrame issue
+        with patch("pandas.read_csv") as mock_read_csv:
+            mock_read_csv.return_value = pd.DataFrame({
+                "Insomnia Severity": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                "Sleep Quality": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                "Depression Level": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                "Sleep Hygiene": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                "Negative Thoughts About Sleep": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                "Bedtime Worrying": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                "Stress Level": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                "Coping Skills": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                "Emotion Regulation": [1, 2, 3, 4, 5, 1, 2, 3, 4, 5],
+                "Age": [25, 30, 35, 40, 45, 25, 30, 35, 40, 45],
+                "Insomnia Level": ["No Insomnia", "Mild", "Moderate", "Severe", "No Insomnia", "Mild", "Moderate", "Severe", "No Insomnia", "Mild"]
+            })
+
+            mock_fit_resample.return_value = (dummy_features, dummy_target)
+
+            accuracy = retrain_model_with_feedback()
+            self.assertIsInstance(accuracy, float)
+            self.assertGreaterEqual(accuracy, 0.0)
+            self.assertLessEqual(accuracy, 1.0)
 
 if __name__ == "__main__":
     unittest.main()
