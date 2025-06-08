@@ -15,6 +15,7 @@ class TestAppIntegration(unittest.TestCase):
         mock_st.session_state = MagicMock()
         mock_st.session_state.logged_in = True
         mock_st.session_state.username = "testuser"
+        mock_st.session_state.get = MagicMock(return_value="Home")
         mock_load_model.return_value = (MagicMock(), MagicMock(), MagicMock())
         mock_recommend.return_value = (["Song1", "Song2"], ["link1", "link2"], ["thumb1", "thumb2"])
         mock_st.number_input.side_effect = [2.0, 3.0, 1.0, 2.0, 0.0, 1.0, 2.0, 3.0, 1.0, 25, 3]  # inputs + num_songs

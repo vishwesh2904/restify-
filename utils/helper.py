@@ -9,7 +9,7 @@ from spotipy.oauth2 import SpotifyClientCredentials
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 from sklearn.feature_selection import mutual_info_classif
 from imblearn.over_sampling import SMOTE
 
@@ -78,6 +78,8 @@ def generate_data(n_samples=300):
         }
     }
 
+
+
     samples_per_class = n_samples // 4
     for level, stats in class_feature_stats.items():
         for _ in range(samples_per_class):
@@ -111,7 +113,6 @@ def train_and_save_model(df):
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
 
-    # Reduced model complexity to decrease accuracy to around 92%
     model = RandomForestClassifier(
         n_estimators=5,
         max_depth=2,
@@ -127,7 +128,20 @@ def train_and_save_model(df):
     joblib.dump(scaler, "models/scaler.pkl")
 
     accuracy = model.score(X_scaled, y_encoded)
-    return accuracy
+    y_pred = model.predict(X_scaled)
+    f1 = f1_score(y_encoded, y_pred, average='weighted')
+    cm = confusion_matrix(y_encoded, y_pred)
+
+    print("="*40)
+    print("Model Evaluation Metrics:")
+    print("="*40)
+    print(f"Accuracy: {accuracy * 100:.2f}%")
+    print(f"F1 Score (weighted): {f1:.4f}")
+    print("Confusion Matrix:")
+    print(cm)
+    print("="*40)
+
+    return accuracy, f1, cm
 
 # --- Load Model ---
 import joblib
@@ -225,9 +239,13 @@ def retrain_model_with_feedback():
     accuracy = accuracy_score(y_test, y_pred)
 
     os.makedirs("models", exist_ok=True)
-    joblib.dump(best_model, "models/insomnia_model.pkl")
-    joblib.dump(le, "models/label_encoder.pkl")
-    joblib.dump(scaler, "models/scaler.pkl")
+    model_path = os.path.join("models", "insomnia_model.pkl")
+    label_encoder_path = os.path.join("models", "label_encoder.pkl")
+    scaler_path = os.path.join("models", "scaler.pkl")
+
+    joblib.dump(best_model, model_path)
+    joblib.dump(le, label_encoder_path)
+    joblib.dump(scaler, scaler_path)
 
     return accuracy
 

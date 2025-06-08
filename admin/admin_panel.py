@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
 import os
 
 import sys
@@ -93,7 +93,18 @@ def show_admin_panel():
 
         y_pred = model.predict(X_scaled)
         accuracy = accuracy_score(y_encoded, y_pred)
+        f1 = f1_score(y_encoded, y_pred, average='weighted')
+        cm = confusion_matrix(y_encoded, y_pred)
+
         st.success(f"✅ Current Model Accuracy: **{accuracy * 100:.2f}%**")
+        st.success(f"ℹ️ F1 Score (weighted): **{f1:.4f}**")
+
+        st.markdown("### Confusion Matrix")
+        fig, ax = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax)
+        ax.set_xlabel("Predicted Label")
+        ax.set_ylabel("True Label")
+        st.pyplot(fig)
     except Exception as e:
         st.error(f"❌ Could not compute model accuracy: {e}")
 

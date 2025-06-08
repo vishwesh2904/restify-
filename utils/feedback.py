@@ -1,5 +1,5 @@
 import pandas as pd
-import shutil
+
 import os
 
 # Define the features expected by the model
@@ -109,8 +109,8 @@ def update_insomnia_synthetic_with_questionnaire(new_data: dict, insomnia_csv_pa
     # Retrain model
     from utils.helper import retrain_model_with_feedback
     try:
-        train_acc, test_acc = retrain_model_with_feedback()
-        print(f"Model retrained. Train accuracy: {train_acc:.2f}, Test accuracy: {test_acc:.2f}")
+        accuracy = retrain_model_with_feedback()
+        print(f"Model retrained. Accuracy: {accuracy:.2f}")
     except Exception as e:
         print(f"Error retraining model: {e}")
         return False
